@@ -1,8 +1,8 @@
 #include "medicine.h"
 
 int main() {
-    setupFile();
+    loadMedicines();
     mainMenu();
 
     return 0;
-}
+}          

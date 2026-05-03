@@ -1,185 +1,683 @@
 #include <stdio.h>
 #include <string.h>
-#include "medicine.h"
 #include <stdlib.h>
+#include <time.h>
+#include "medicine.h"
 
-static int readLineTrim(FILE *file, char *buf, size_t size) {
-    if (fgets(buf, (int)size, file) == NULL) return 0;
-    buf[strcspn(buf, "\r\n")] = '\0';
-    return 1;
+struct Medicine med[MAX];
+struct Supplier supplier[MAX];
+int count = 0;
+int supplierCount = 0;
+
+int compareDates(char *date1, char *date2) {
+    int d1, m1, y1, d2, m2, y2;
+    sscanf(date1, "%d/%d/%d", &d1, &m1, &y1);
+    sscanf(date2, "%d/%d/%d", &d2, &m2, &y2);
+    
+    if (y1 != y2) return y1 - y2;
+    if (m1 != m2) return m1 - m2;
+    return d1 - d2;
 }
 
-void setupFile() {
-    FILE *file;
+int getDaysDifference(char *date) {
+    int d, m, y;
+    sscanf(date, "%d/%d/%d", &d, &m, &y);
+    
+    time_t now = time(NULL);
+    struct tm *timeinfo = localtime(&now);
+    
+    struct tm futureDate = {0};
+    futureDate.tm_mday = d;
+    futureDate.tm_mon = m - 1;
+    futureDate.tm_year = y - 1900;
+    futureDate.tm_hour = 0;
+    futureDate.tm_min = 0;
+    futureDate.tm_sec = 0;
+    
+    time_t future = mktime(&futureDate);
+    time_t current = mktime(timeinfo);
+    
+    int diff = (int)((future - current) / (60 * 60 * 24));
+    return diff;
+}
 
-    file = fopen("medicines.txt", "a");
+void loadMedicines() {
+    FILE *fp = fopen("medicines.txt", "r");
 
-    if (file == NULL) {
-        printf("File could not be created.\n");
+    if (fp == NULL) {
+        printf("ERROR: medicines.txt not found!\n");
         return;
     }
 
-    fclose(file);
+    count = 0;
+
+    while (fscanf(fp, "%d %s %d %f %s %d",
+                  &med[count].id,
+                  med[count].name,
+                  &med[count].stock,
+                  &med[count].price,
+                  med[count].expiryDate,
+                  &med[count].supplierId) == 6) {
+        count++;
+    }
+
+    fclose(fp);
+}
+
+void saveMedicines() {
+    FILE *fp = fopen("medicines.txt", "w");
+
+    if (fp == NULL) {
+        printf("ERROR!\n");
+        return;
+    }
+
+    for (int i = 0; i < count; i++) {
+        fprintf(fp, "%d %s %d %.2f %s %d\n",
+                med[i].id,
+                med[i].name,
+                med[i].stock,
+                med[i].price,
+                med[i].expiryDate,
+                med[i].supplierId);
+    }
+
+    fclose(fp);
+}
+
+void showMedicines() {
+    if (count == 0) {
+        printf("No medicines available!\n");
+        return;
+    }
+
+    printf("\nID\tName\t\tStock\tPrice\tExpiry\t\tSupplier\n");
+
+    for (int i = 0; i < count; i++) {
+        printf("%d\t%s\t%d\t%.2f\t%s\t%d\n",
+               med[i].id,
+               med[i].name,
+               med[i].stock,
+               med[i].price,
+               med[i].expiryDate,
+               med[i].supplierId);
+    }
 }
 
 void addMedicine() {
-    FILE *file;
-    struct Medicine med;
-
-    file = fopen("medicines.txt", "a");
-
-    if (file == NULL) {
-        printf("Error opening file.\n");
-        return;
-    }
+    struct Medicine newMed;
 
     printf("\nEnter medicine ID: ");
-    scanf("%d", &med.id);
+    scanf("%d", &newMed.id);
 
     printf("Enter medicine name: ");
-    scanf(" %[^\n]", med.name);
+    scanf("%s", newMed.name);
 
-    printf("Enter quantity: ");
-    scanf("%d", &med.quantity);
+    printf("Enter stock quantity: ");
+    scanf("%d", &newMed.stock);
 
     printf("Enter price: ");
-    scanf("%f", &med.price);
+    scanf("%f", &newMed.price);
 
-    fprintf(file, "%d\n", med.id);
-    fprintf(file, "%s\n", med.name);
-    fprintf(file, "%d\n", med.quantity);
-    fprintf(file, "%.2f\n", med.price);
+    printf("Enter expiry date (DD/MM/YYYY): ");
+    scanf("%s", newMed.expiryDate);
 
-    fclose(file);
+    printf("Enter supplier ID: ");
+    scanf("%d", &newMed.supplierId);
+
+    med[count] = newMed;
+    count++;
+
+    saveMedicines();
 
     printf("\nMedicine added successfully.\n");
 }
 
-void viewAllMedicines() {
-    FILE *file;
-    struct Medicine med;
-    int found = 0;
-    char line[256];
-
-    file = fopen("medicines.txt", "r");
-
-        if (file == NULL) {
-            printf("No medicine file found.\n");
-            return;
-        }
-
-        printf("\n========== All Medicines ==========");
-
-        while (1) {
-            if (!readLineTrim(file, line, sizeof(line))) break;
-            if (line[0] == '\0') continue;
-
-            med.id = (int)strtol(line, NULL, 10);
-
-            if (!readLineTrim(file, med.name, sizeof(med.name))) break;
-
-            if (!readLineTrim(file, line, sizeof(line))) break;
-            med.quantity = (int)strtol(line, NULL, 10);
-
-            if (!readLineTrim(file, line, sizeof(line))) break;
-            med.price = strtof(line, NULL);
-
-            printf("\nMedicine ID: %d", med.id);
-            printf("\nMedicine Name: %s", med.name);
-            printf("\nQuantity: %d", med.quantity);
-            printf("\nPrice: %.2f\n", med.price);
-
-            found = 1;
-        }
-
-    if (!found) {
-        printf("\nNo medicines found.\n");
-    }
-
-    fclose(file);
-}
-
-void searchMedicine() {
-    FILE *file;
-    struct Medicine med;
-    char line[256];
-    int searchId;
+void sellMedicine() {
+    int id, q;
+    float total;
     int found = 0;
 
-    file = fopen("medicines.txt", "r");
+    FILE *fp = fopen("sales.txt", "a");
 
-    if (file == NULL) {
-        printf("No medicine file found.\n");
+    if (fp == NULL) {
+        printf("ERROR in opening sales file!\n");
         return;
     }
+
+    showMedicines();
+
+    printf("\nEnter Medicine ID: ");
+    scanf("%d", &id);
+
+    for (int i = 0; i < count; i++) {
+        if (med[i].id == id) {
+            found = 1;
+
+            // Check if medicine is expired
+            if (getDaysDifference(med[i].expiryDate) < 0) {
+                printf("ERROR: Medicine is expired! Cannot sell.\n");
+                fclose(fp);
+                return;
+            }
+
+            printf("Enter Quantity: ");
+            scanf("%d", &q);
+
+            if (q > med[i].stock) {
+                printf("Not enough stock!\n");
+                fclose(fp);
+                return;
+            }
+
+            total = (float)q * med[i].price;
+            med[i].stock -= q;
+
+            printf("\n    BILL    \n");
+            printf("Name: %s\n", med[i].name);
+            printf("Qty: %d\n", q);
+            printf("Expiry: %s\n", med[i].expiryDate);
+            printf("Total: %.2f\n", total);
+
+            fprintf(fp, "%s %d %.2f\n",
+                    med[i].name, q, total);
+
+            fclose(fp);
+
+            saveMedicines();
+
+            printf("Sale successful!\n");
+            return;
+        }
+    }
+
+    if (!found) {
+        printf("Medicine not found!\n");
+    }
+
+    fclose(fp);
+}
+
+void salesReport() {
+    FILE *fp = fopen("sales.txt", "r");
+
+    if (fp == NULL) {
+        printf("No sales record found!\n");
+        return;
+    }
+
+    char name[50];
+    int q;
+    float total;
+
+    printf("\n--- SALES REPORT ---\n");
+
+    while (fscanf(fp, "%s %d %f", name, &q, &total) == 3) {
+        printf("%s | Quantity: %d | Total: %.2f\n",
+               name, q, total);
+    }
+
+    fclose(fp);
+}
+
+// Tanusree's Functions
+void searchMedicine() {
+    int searchId;
+    int found = 0;
 
     printf("\nEnter medicine ID to search: ");
     scanf("%d", &searchId);
 
-    while (1) {
-        if (!readLineTrim(file, line, sizeof(line))) break;
-        if (line[0] == '\0') continue;
-
-        med.id = (int)strtol(line, NULL, 10);
-
-        if (!readLineTrim(file, med.name, sizeof(med.name))) break;
-
-        if (!readLineTrim(file, line, sizeof(line))) break;
-        med.quantity = (int)strtol(line, NULL, 10);
-
-        if (!readLineTrim(file, line, sizeof(line))) break;
-        med.price = strtof(line, NULL);
-
-        if (med.id == searchId) {
-            printf("\nMedicine found:\n");
-            printf("Medicine ID: %d\n", med.id);
-            printf("Medicine Name: %s\n", med.name);
-            printf("Quantity: %d\n", med.quantity);
-            printf("Price: %.2f\n", med.price);
-
+    for (int i = 0; i < count; i++) {
+        if (med[i].id == searchId) {
+            printf("\n--- Medicine Found ---\n");
+            printf("ID: %d\n", med[i].id);
+            printf("Name: %s\n", med[i].name);
+            printf("Stock: %d\n", med[i].stock);
+            printf("Price: %.2f\n", med[i].price);
+            printf("Expiry Date: %s\n", med[i].expiryDate);
+            printf("Supplier ID: %d\n", med[i].supplierId);
             found = 1;
             break;
         }
     }
 
     if (!found) {
-        printf("\nMedicine not found.\n");
+        printf("Medicine not found!\n");
+    }
+}
+
+void updateMedicine() {
+    int id;
+    int found = 0;
+
+    printf("\nEnter medicine ID to update: ");
+    scanf("%d", &id);
+
+    for (int i = 0; i < count; i++) {
+        if (med[i].id == id) {
+            found = 1;
+
+            printf("\nCurrent details:\n");
+            printf("Name: %s\n", med[i].name);
+            printf("Stock: %d\n", med[i].stock);
+            printf("Price: %.2f\n", med[i].price);
+            printf("Expiry: %s\n", med[i].expiryDate);
+
+            printf("\nEnter new name: ");
+            scanf("%s", med[i].name);
+
+            printf("Enter new stock: ");
+            scanf("%d", &med[i].stock);
+
+            printf("Enter new price: ");
+            scanf("%f", &med[i].price);
+
+            printf("Enter new expiry date (DD/MM/YYYY): ");
+            scanf("%s", med[i].expiryDate);
+
+            saveMedicines();
+            printf("Medicine updated successfully!\n");
+            break;
+        }
     }
 
-    fclose(file);
+    if (!found) {
+        printf("Medicine not found!\n");
+    }
+}
+
+void deleteMedicine() {
+    int id;
+    int found = 0;
+
+    printf("\nEnter medicine ID to delete: ");
+    scanf("%d", &id);
+
+    for (int i = 0; i < count; i++) {
+        if (med[i].id == id) {
+            found = 1;
+
+            for (int j = i; j < count - 1; j++) {
+                med[j] = med[j + 1];
+            }
+            count--;
+
+            saveMedicines();
+            printf("Medicine deleted successfully!\n");
+            break;
+        }
+    }
+
+    if (!found) {
+        printf("Medicine not found!\n");
+    }
+}
+
+void increaseStock() {
+    int id, quantity;
+    int found = 0;
+
+    printf("\nEnter medicine ID: ");
+    scanf("%d", &id);
+
+    for (int i = 0; i < count; i++) {
+        if (med[i].id == id) {
+            found = 1;
+
+            printf("Current stock: %d\n", med[i].stock);
+            printf("Enter quantity to add: ");
+            scanf("%d", &quantity);
+
+            med[i].stock += quantity;
+
+            saveMedicines();
+            printf("Stock increased! New stock: %d\n", med[i].stock);
+            break;
+        }
+    }
+
+    if (!found) {
+        printf("Medicine not found!\n");
+    }
+}
+
+void decreaseStock() {
+    int id, quantity;
+    int found = 0;
+
+    printf("\nEnter medicine ID: ");
+    scanf("%d", &id);
+
+    for (int i = 0; i < count; i++) {
+        if (med[i].id == id) {
+            found = 1;
+
+            printf("Current stock: %d\n", med[i].stock);
+            printf("Enter quantity to reduce: ");
+            scanf("%d", &quantity);
+
+            if (quantity > med[i].stock) {
+                printf("Cannot reduce more than available stock!\n");
+                break;
+            }
+
+            med[i].stock -= quantity;
+
+            saveMedicines();
+            printf("Stock decreased! New stock: %d\n", med[i].stock);
+            break;
+        }
+    }
+
+    if (!found) {
+        printf("Medicine not found!\n");
+    }
+}
+
+void lowStockAlert() {
+    printf("\n--- LOW STOCK ALERT (Stock <= 50) ---\n");
+    int found = 0;
+
+    for (int i = 0; i < count; i++) {
+        if (med[i].stock <= 50 && med[i].stock > 0) {
+            printf("ID: %d | Name: %s | Stock: %d\n",
+                   med[i].id, med[i].name, med[i].stock);
+            found = 1;
+        }
+    }
+
+    if (!found) {
+        printf("No medicines with low stock.\n");
+    }
+}
+
+void outOfStockAlert() {
+    printf("\n--- OUT OF STOCK ALERT ---\n");
+    int found = 0;
+
+    for (int i = 0; i < count; i++) {
+        if (med[i].stock == 0) {
+            printf("ID: %d | Name: %s\n", med[i].id, med[i].name);
+            found = 1;
+        }
+    }
+
+    if (!found) {
+        printf("No out of stock medicines.\n");
+    }
+}
+
+// Nowshin's Functions
+void checkExpiredMedicines() {
+    printf("\n--- EXPIRED MEDICINES ---\n");
+    int found = 0;
+
+    for (int i = 0; i < count; i++) {
+        if (getDaysDifference(med[i].expiryDate) < 0) {
+            printf("ID:     %d | Name: %s          | Expiry: %s |     Stock: %d\n",
+                   med[i].id, med[i].name, med[i].expiryDate, med[i].stock);
+            found = 1;
+        }
+    }
+
+    if (!found) {
+        printf("No expired medicines found.\n");
+    }
+}
+
+void checkNearExpiryMedicines() {
+    printf("\n--- NEAR EXPIRY MEDICINES (Within 30 days) ---\n");
+    int found = 0;
+
+    for (int i = 0; i < count; i++) {
+        int days = getDaysDifference(med[i].expiryDate);
+        if (days >= 0 && days <= 30) {
+            printf("ID: %d | Name: %s | Expiry: %s | Days Left: %d\n",
+                   med[i].id, med[i].name, med[i].expiryDate, days);
+            found = 1;
+        }
+    }
+
+    if (!found) {
+        printf("No medicines expiring within 30 days.\n");
+    }
+}
+
+void loadSuppliers() {
+    FILE *fp = fopen("suppliers.txt", "r");
+
+    if (fp == NULL) {
+        supplierCount = 0;
+        return;
+    }
+
+    supplierCount = 0;
+
+    while (fscanf(fp, "%d %s %s %99[^\n]",
+                  &supplier[supplierCount].id,
+                  supplier[supplierCount].name,
+                  supplier[supplierCount].contact,
+                  supplier[supplierCount].address) == 4) {
+        supplierCount++;
+    }
+
+    fclose(fp);
+}
+
+void saveSuppliers() {
+    FILE *fp = fopen("suppliers.txt", "w");
+
+    if (fp == NULL) {
+        printf("ERROR opening suppliers file!\n");
+        return;
+    }
+
+    for (int i = 0; i < supplierCount; i++) {
+        fprintf(fp, "%d %s %s %s\n",
+                supplier[i].id,
+                supplier[i].name,
+                supplier[i].contact,
+                supplier[i].address);
+    }
+
+    fclose(fp);
+}
+
+void addSupplier() {
+    struct Supplier newSupplier;
+
+    printf("\nEnter supplier ID: ");
+    scanf("%d", &newSupplier.id);
+
+    printf("Enter supplier name: ");
+    scanf("%s", newSupplier.name);
+
+    printf("Enter contact number: ");
+    scanf("%s", newSupplier.contact);
+
+    printf("Enter address: ");
+    scanf(" %[^\n]", newSupplier.address);
+
+    supplier[supplierCount] = newSupplier;
+    supplierCount++;
+
+    saveSuppliers();
+
+    printf("Supplier added successfully!\n");
+}
+
+void viewSuppliers() {
+    if (supplierCount == 0) {
+        printf("No suppliers available!\n");
+        return;
+    }
+
+    printf("\n--- SUPPLIERS LIST ---\n");
+    printf("ID\tName\t\tContact\t\tAddress\n");
+
+    for (int i = 0; i < supplierCount; i++) {
+        printf("%d\t%s\t%s\t%s\n",
+               supplier[i].id,
+               supplier[i].name,
+               supplier[i].contact,
+               supplier[i].address);
+    }
+}
+
+void updateSupplier() {
+    int id;
+    int found = 0;
+
+    printf("\nEnter supplier ID to update: ");
+    scanf("%d", &id);
+
+    for (int i = 0; i < supplierCount; i++) {
+        if (supplier[i].id == id) {
+            found = 1;
+
+            printf("Enter new name: ");
+            scanf("%s", supplier[i].name);
+
+            printf("Enter new contact: ");
+            scanf("%s", supplier[i].contact);
+
+            printf("Enter new address: ");
+            scanf(" %[^\n]", supplier[i].address);
+
+            saveSuppliers();
+            printf("Supplier updated successfully!\n");
+            break;
+        }
+    }
+
+    if (!found) {
+        printf("Supplier not found!\n");
+    }
+}
+
+void deleteSupplier() {
+    int id;
+    int found = 0;
+
+    printf("\nEnter supplier ID to delete: ");
+    scanf("%d", &id);
+
+    for (int i = 0; i < supplierCount; i++) {
+        if (supplier[i].id == id) {
+            found = 1;
+
+            for (int j = i; j < supplierCount - 1; j++) {
+                supplier[j] = supplier[j + 1];
+            }
+            supplierCount--;
+
+            saveSuppliers();
+            printf("Supplier deleted successfully!\n");
+            break;
+        }
+    }
+
+    if (!found) {
+        printf("Supplier not found!\n");
+    }
 }
 
 void mainMenu() {
     int choice;
 
+    loadSuppliers();
+
     while (1) {
-        printf("\n\n========== Pharmacy Management System ==========\n");
-        printf("1. Add medicine\n");
-        printf("2. View all medicines\n");
-        printf("3. Search medicine\n");
-        printf("4. Exit\n");
-        printf("Enter your choice: ");
-        scanf("%d", &choice);
+        printf("\n==========PHARMACY MANAGEMENT SYSTEM ==========\n");
+        printf("--- GENERAL OPTIONS ---\n");
+        printf("1.  Show Medicines\n");
+        printf("2.  Add Medicine\n");
+        printf("3.  Sell Medicine\n");
+        printf("4.  Sales Report\n");
+        printf("--- STOCK MANAGEMENT ---\n");
+        printf("5.  Search Medicine\n");
+        printf("6.  Update Medicine\n");
+        printf("7.  Delete Medicine\n");
+        printf("8.  Increase Stock\n");
+        printf("9.  Decrease Stock\n");
+        printf("10. Low Stock Alert\n");
+        printf("11. Out of Stock Alert\n");
+        printf("--- EXPIRY MANAGEMENT  ---\n");
+        printf("12. Check Expired Medicines\n");
+        printf("13. Check Near Expiry Medicines\n");
+        printf("--- SUPPLIER MANAGEMENT ---\n");
+        printf("14. Add Supplier\n");
+        printf("15. View Suppliers\n");
+        printf("16. Update Supplier\n");
+        printf("17. Delete Supplier\n");
+        printf("18. Exit\n");
+
+        printf("Enter choice: ");
+        if (scanf("%d", &choice) != 1) {
+            // Clear input buffer if scanf fails
+            while (getchar() != '\n');
+            printf("Invalid input!\n");
+            continue;
+        }
 
         switch (choice) {
             case 1:
+                showMedicines();
+                break;
+            case 2:
                 addMedicine();
                 break;
-
-            case 2:
-                viewAllMedicines();
-                break;
-
             case 3:
+                sellMedicine();
+                break;
+            case 4:
+                salesReport();
+                break;
+            case 5:
                 searchMedicine();
                 break;
-
-            case 4:
-                printf("\nExiting program.\n");
+            case 6:
+                updateMedicine();
+                break;
+            case 7:
+                deleteMedicine();
+                break;
+            case 8:
+                increaseStock();
+                break;
+            case 9:
+                decreaseStock();
+                break;
+            case 10:
+                lowStockAlert();
+                break;
+            case 11:
+                outOfStockAlert();
+                break;
+            case 12:
+                checkExpiredMedicines();
+                break;
+            case 13:
+                checkNearExpiryMedicines();
+                break;
+            case 14:
+                addSupplier();
+                break;
+            case 15:
+                viewSuppliers();
+                break;
+            case 16:
+                updateSupplier();
+                break;
+            case 17:
+                deleteSupplier();
+                break;
+            case 18:
+                printf("Exiting...\n");
                 return;
-
             default:
-                printf("\nInvalid choice. Try again.\n");
+                printf("Invalid choice!\n");
         }
     }
 }
